@@ -1,0 +1,8 @@
+# LSP Files
+.clj-kondo
+.cpcache
+.lsp
+.nrepl-port
+
+# Generated models
+models
