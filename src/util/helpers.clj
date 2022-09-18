@@ -3,15 +3,15 @@
             [scad-clj.model :as m]
             [clojure.java.io :refer [make-parents]]))
 
-(defn render [model & {:keys [name fn] :or {name "render" fn 16}}]
+(defn render [model & {:keys [name fn] :or {name "render" fn 32}}]
   (let [file(str "models/" name ".scad")]
     (make-parents file)
     (spit file (write-scad
                  (m/fn! fn)
-                 model))))
+                 (m/with-center false model)))))
 
 (defn render-high [model & {:keys [name] :or {name "render"}}]
-  (render model :name name :fn 256))
+  (render model :name name :fn 128))
 
 (defn <- [f & args]
   (let [args-vec (vec args)]
