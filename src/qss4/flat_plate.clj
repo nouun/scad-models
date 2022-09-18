@@ -1,8 +1,8 @@
 (ns qss4.flat-plate
   (:require [scad-clj.model :as m]
-            [util.helpers :refer [render render-high <- when->>]]
-            [util.math :refer [neg]]))
+            [util.helpers :refer [render render-high <- when->>]]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Configurable variables
 ; Measuments
 (def big-height 57.8)
@@ -28,22 +28,34 @@
    {:width 6
     :height 6
     :thread-width 2.4
-    :thickness 0.8}
+    :thickness 0.8
+    :offset 1.2}
    :pcb
    {:width 4.4
     :height 6
-    :bolt-height 2}})
+    :offset 1.2
+    :stand
+    {:height 10
+     :width 1.4}
+    :inset
+    {:height 1.6
+     :width 1}}})
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Below is not configurable unless you understand what you are doing
+
 (def offset
   {:big-y (- (/ width 2) (/ big-height 2))
    :small-y (-> (/ width 2)
-                (neg)
+                (-)
                 (+ (/ small-height 2)))
    :small-x (-> (/ big-height 2)
-                (neg)
+                (-)
                 (+ (/ small-height 2)))})
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base Plate
 ; Big circle
 (defn big [& {:keys [margin height] :or {margin 0 height 0}}]
@@ -51,7 +63,7 @@
     (m/cylinder (-> big-height
                     (/ 2)
                     (- margin))
-                height :center false)
+                height)
     (m/translate [0 (offset :big-y) 0])))
 
 ; Small circle
@@ -60,20 +72,20 @@
     (m/cylinder (-> small-height
                     (/ 2)
                     (- margin))
-      height :center false)
+                height)
     (m/translate [(offset :small-x) (offset :small-y) 0])))
 
 ; Join for two circles
 (defn join [& {:keys [margin height] :or {margin 0 height 0}}]
-  (->>
-    (m/square (- small-height (* margin 2))
-              (- width (/ small-height 2) (/ big-height 2))
-              :center false)
-    (m/translate [(-> (offset :small-x)
+  (let [width (- width (/ small-height 2) (/ big-height 2))]
+    (->>
+      (m/square (- small-height (* margin 2)) width)
+      (m/translate [(-> (offset :small-x)
                       (- (/ small-height 2))
                       (+ margin))
-                  (offset :small-y) 0])
-    (m/extrude-linear {:height height :center false})))
+                    (offset :small-y)
+                    0])
+      (m/extrude-linear {:height height}))))
 
 ; All parts in one
 (defn base-plate [& {:keys [margin height] :or {margin 0 height (brim :height)}}]
@@ -82,43 +94,50 @@
            (join :margin margin :height height)))
 
 
-;; Standoffs
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Standoff Helper
 
-(defn cover-standoff-translate [translations model]
+(defn standoff-translate [translations model]
   (let [[tx ty] (nth translations 0)]
     (->> model
-      (when->> (= (count translations) 3)
-        (m/translate [(nth translations 2) 0 0])
+      (when->> (>= (count translations) 3)
+        (m/translate [(nth translations 2) 0 0]))
+      (when->> (>= (count translations) 2)
         (m/rotate [0 0 (m/deg->rad (nth translations 1))]))
       (m/translate [tx ty 0]))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Cover Standoffs
 
 (defn make-cover-standoffs [model]
   (let [cover-offset (-> ((standoff :cover) :width)
                          (/ 2)
-                         (+ (* (base :offset) 0.6)))
+                         (+ ((standoff :cover) :offset)))
+        small-translate [(offset :small-x) (offset :small-y)]
+        big-translate [0 (offset :big-y)]
         big-offset (-> (/ big-height 2)
                        (- cover-offset))]
-    (map #(cover-standoff-translate % model)
-         [[[(offset :small-x) (offset :small-y)] -45 (-> (/ small-height 2)
-                                                         (- cover-offset))]
-          [[0 (offset :big-y)] 173 big-offset]
-          [[0 (offset :big-y)] 0 big-offset]
-          [[0 (offset :big-y)] 86 big-offset] ; 85 too high - try 85.5 next if too low
-          [[(-> (neg big-height)
+    (map #(standoff-translate % model)
+         [[small-translate -45 (-> (/ small-height 2)
+                                   (- cover-offset))]
+          [big-translate 173 big-offset]
+          [big-translate   0 big-offset]
+          [big-translate  86 big-offset]
+          [[(-> (- big-height)
                 (/ 2)
                 (+ cover-offset))
             (-> (offset :small-y)
-                (+ (/ small-height 2)))] 0 0]]))) ; + 1 too much - try 0.5 next if 0 too little
+                (+ (/ small-height 2) 0.5))]]]))) ; + 1 too much, + 0 too little
 
-(def base-cover-diffs
+(def cover-standoff-diffs
   (make-cover-standoffs
     (m/cylinder (-> ((standoff :cover) :width)
                     (/ 2)
                     (- ((standoff :cover) :thickness)))
-                ((standoff :cover) :height)
-                :center false)))
+                ((standoff :cover) :height))))
 
-(def base-cover-standoffs
+(def cover-standoffs
  (make-cover-standoffs
    (->>
      (m/cylinder (-> ((standoff :cover) :thread-width)
@@ -134,15 +153,42 @@
      (m/union
        (m/difference
          (m/cylinder (/ ((standoff :cover) :width) 2)
-                     ((standoff :cover) :height)
-                     :center false)
+                     ((standoff :cover) :height))
          (m/cylinder (-> ((standoff :cover) :width)
                          (/ 2)
                          (- ((standoff :cover) :thickness)))
-                     ((standoff :cover) :height)
-                     :center false))))))
+                     ((standoff :cover) :height)))))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; PCB Standoffs
+
+(def pcb-standoffs
+  (let [cover-offset (-> ((standoff :cover) :width)
+                         (/ 2)
+                         (+ ((standoff :cover) :offset)))
+        small-translate [(offset :small-x) (offset :small-y)]
+        big-translate [0 (offset :big-y)]
+        big-offset (-> (/ big-height 2)
+                       (- cover-offset))
+        small-offset (-> (/ small-height 2)
+                         (- cover-offset))]
+    (map #(->>
+            (m/cylinder (((standoff :pcb) :stand) :width)
+                        (((standoff :pcb) :stand) :height))
+            (m/union
+              (->>
+                (m/cylinder (((standoff :pcb) :inset) :width)
+                            (((standoff :pcb) :inset) :height))
+                (m/translate [0 0 (((standoff :pcb) :stand) :height)])))
+            (standoff-translate %))
+         [[small-translate   0 small-offset]
+          [small-translate 225 small-offset]
+          [big-translate    45 big-offset]
+          [big-translate   140 big-offset]])))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base Bottom Chamfer
 
 (defn hull-part [part]
@@ -164,15 +210,24 @@
     (m/union
       (m/difference
         (apply m/union (map hull-part [small big join]))
-        base-cover-diffs)
+        cover-standoff-diffs)
       (->>
-        (m/union base-cover-standoffs)
+        (m/union cover-standoffs)
         (<- m/intersection
             (base-plate :margin thickness :height ((standoff :cover) :height)))
+        (m/union
+          pcb-standoffs)
         (m/translate [0 0 (base :thickness)])))))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Export to file
-;(render base-cover :name "flat_plate" :fn 64)
 
-(render base-cover :fn 64)
+(render-high base-cover :name "flat_plate")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Used for debugging
+
+(def model
+  base-cover)
