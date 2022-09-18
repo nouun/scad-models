@@ -5,4 +5,4 @@
 .nrepl-port
 
 # Generated models
-models
+models/render.*
