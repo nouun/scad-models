@@ -1,4 +1,4 @@
 {:paths ["src"]
  :deps {org.clojure/clojure {:mvn/version "1.10.3"}
-        scad-clj/scad-clj {:git/url "https://github.com/PEZ/scad-clj.git"
-                           :sha "92f31f7fe76dec5c8a59a6a6c085555a507ba7ff"}}}
+        scad-clj/scad-clj {:git/url "https://github.com/nouun/scad-clj-edn.git"
+                           :sha "6a8315f9e7cd5458a8ef74765da6b02518b94293"}}}
